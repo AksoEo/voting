@@ -17,6 +17,7 @@ export type StvResult<T, N> = {
     missing: N[];
 };
 
+/** single transferable vote output */
 export interface StvData<N> {
     winners: N[];
     events: StvEvent<N>[];
@@ -31,6 +32,7 @@ export enum StvEventType {
     Eliminate = 'eliminate',
 }
 
+/** events in the event log of how the winners were computed */
 export type StvEvent<N> = {
     type: StvEventType.ElectWithQuota,
     elected: N[],
@@ -45,6 +47,7 @@ export type StvEvent<N> = {
     values: Map<N, number>,
 };
 
+// for converting from one candidate type to another
 export function remapStvEvent<N, M>(event: StvEvent<N>, remap: (node: N) => M): StvEvent<M> {
     if (event.type === StvEventType.ElectWithQuota) {
         return {

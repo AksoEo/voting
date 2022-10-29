@@ -17,11 +17,13 @@ export type TmResult<T, N> = {
     missing: N[],
 };
 
+/** threshold majority output */
 export interface TmData<N> {
     winners: N[];
     tally: Map<N, number>;
 }
 
+// for converting form one candidate type to another
 export function remapTmData<N, M>(data: TmData<N>, remap: (node: N) => M): TmData<M> {
     return {
         winners: data.winners.map(remap),

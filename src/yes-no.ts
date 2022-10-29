@@ -1,8 +1,11 @@
 import { ConfigYesNo, ConfigYesNoBlank, passesThreshold, countBlanks } from './config';
 
+/** “no” value of encoded ballots */
 export const YNB_NO = 1;
+/** “yes” value of encoded ballots */
 export const YNB_YES = 2;
 
+/** yes/no vote output */
 export interface YnData {
     tally: {
         yes: number,
@@ -10,8 +13,11 @@ export interface YnData {
         blank: number,
     },
     pass: {
+        /** whether the entire vote passed, according to the configured criteria (`majorityMustReachBoth`) */
         result: boolean,
+        /** whether the majority of ballots voted yes, according to the configured threshold */
         majority: boolean,
+        /** whether the majority of eligible voters voted yes, according to the configured threshold */
         voters: boolean,
     },
 };

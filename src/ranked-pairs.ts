@@ -37,6 +37,7 @@ export interface RpRound<N> {
     lockGraphEdges: [N, N][];
 }
 
+// for converting from one candidate type to another
 export function remapRpRound<N, M>(round: RpRound<N>, remap: (node: N) => M): RpRound<M> {
     return {
         winner: remap(round.winner),

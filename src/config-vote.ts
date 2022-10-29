@@ -16,6 +16,7 @@ import { rankedPairs, RpData, RpStatus, remapRpData } from './ranked-pairs';
 import { singleTransferableVote, StvData, StvStatus, remapStvData } from './single-transferable-vote';
 import { BallotEncoder } from './ballots';
 
+/** Possible vote outcomes. */
 export enum VoteStatus {
     /** Vote succeeded with a result */
     Success = 'success',
@@ -32,13 +33,16 @@ export enum VoteStatus {
     TooManyBlanks = 'too-many-blanks',
 }
 
+// vote result components
+
+// VoteStatus.Success
 interface TaggedYnSuccess {
     type: VoteType.YesNo | VoteType.YesNoBlank;
     status: VoteStatus.Success;
     ballots: BallotCounts;
     value: YnData;
 }
-interface TaggedSuccess<T, N, D>{
+interface TaggedSuccess<T, N, D> {
     type: T;
     status: VoteStatus.Success;
     ballots: BallotCounts;
@@ -50,6 +54,7 @@ type TaggedRpSuccess<N> = TaggedSuccess<VoteType.RankedPairs, N, RpData<N>>;
 type TaggedStvSuccess<N> = TaggedSuccess<VoteType.SingleTransferableVote, N, StvData<N>>;
 type TaggedAnySuccess<N> = TaggedYnSuccess | TaggedTmSuccess<N> | TaggedRpSuccess<N> | TaggedStvSuccess<N>;
 
+// VoteStatus.TieBreakerNeeded
 interface TaggedTmStvTieBreakerNeeded<N> {
     type: VoteType.ThresholdMajority | VoteType.SingleTransferableVote;
     ballots: BallotCounts;
@@ -64,6 +69,7 @@ interface TaggedRpTieBreakerNeeded<N> {
 }
 type TaggedTieBreakerNeeded<N> = TaggedTmStvTieBreakerNeeded<N> | TaggedRpTieBreakerNeeded<N>;
 
+// VoteStatus.IncompleteTieBreaker
 interface TaggedIncompleteTieBreaker<N> {
     type: VoteType.ThresholdMajority | VoteType.RankedPairs | VoteType.SingleTransferableVote;
     ballots: BallotCounts;
@@ -71,6 +77,7 @@ interface TaggedIncompleteTieBreaker<N> {
     missing: N[];
 }
 
+// VoteStatus.MajorityEmpty
 interface TaggedMajorityEmpty<N> {
     type: VoteType.ThresholdMajority | VoteType.RankedPairs | VoteType.SingleTransferableVote;
     ballots: BallotCounts;
@@ -78,20 +85,27 @@ interface TaggedMajorityEmpty<N> {
     status: VoteStatus.MajorityEmpty;
 }
 
+// VoteStatus.NoQuorum
 interface TaggedNoQuorum {
     type: VoteType;
     status: VoteStatus.NoQuorum;
     ballots: BallotCounts;
 }
+
+// VoteStatus.TooManyBlanks
 interface TaggedTooManyBlanks {
     type: VoteType;
     status: VoteStatus.TooManyBlanks;
     ballots: BallotCounts;
 }
 
+/**
+ * a vote result. union of all possible result statuses.
+ */
 export type VoteResult<N> = TaggedAnySuccess<N> | TaggedTieBreakerNeeded<N> | TaggedIncompleteTieBreaker<N>
     | TaggedMajorityEmpty<N> | TaggedNoQuorum | TaggedTooManyBlanks;
 
+/** remaps a vote result from one candidate type to another with a remapping function. */
 function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteResult<M> {
     if (result.status === VoteStatus.Success) {
         if (result.type === VoteType.YesNo || result.type == VoteType.YesNoBlank) {
@@ -135,16 +149,24 @@ function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteRe
         };
         return { ...result, mentions };
     } else {
+        // other status types contains no candidates
         return result;
     }
 }
 
 /**
- * Runs a vote according to the configuration.
+ * Runs a vote according to the configuration, with numeric candidate values.
  *
- * Additional notes:
+ * Parameters:
  *
- * - Yes/No(/Blank) votes must have ballots with a value of YNB_NO for no and YNB_YES for yes. `candidates` doesn’t matter.
+ * - `config`: a vote configuration. see type definition and AKSO API `Vote` schema for further details
+ * - `ballots`: ballots encoded with a `BallotEncoder`
+ *   YesNo or YesNoBlank votes must have ballots with a value of YNB_NO for no and YNB_YES for yes
+ * - `eligibleVoters`: number of eligible voters
+ * - `candidates`: list of candidates. candidate values must be positive and nonzero.
+ *   only applicable to ThresholdMajority, RankedPairs, SingleTransferableVote.
+ * - `tieBreaker`: an optional tie-breaker ballot that unambiguously orders candidates.
+ *   only applicable to ThresholdMajority, RankedPairs, SingleTransferableVote.
  */
 export function runConfigVote(
     config: ConfigAny,
@@ -178,6 +200,7 @@ export function runConfigVote(
         };
     }
 
+    // YNB is trivial and does not use mentions
     if (config.type === VoteType.YesNo || config.type === VoteType.YesNoBlank) {
         const value = yesNo(config, ballots, eligibleVoters);
         return {
@@ -188,6 +211,7 @@ export function runConfigVote(
         };
     }
 
+    // all other vote types include mentions in output
     let filteredCandidates = candidates;
     let mentions: BallotMentions<Node> = {
         mentions: new Map(),
@@ -201,7 +225,15 @@ export function runConfigVote(
         mentions.mentions = candidateMentions(ballots);
     }
 
-    if (filteredCandidates.length < 2) {
+    // there should be at least one candidate mentioned in ballots; otherwise we can’t elect anyone at all
+    let minFilteredCandidates = 1;
+    if (config.type === VoteType.RankedPairs) {
+        // need at least 2 candidates to have a pair!
+        minFilteredCandidates = 2;
+    }
+
+    if (filteredCandidates.length < minFilteredCandidates) {
+        // too few candidates mentioned; no meaningful election
         return {
             type: config.type,
             status: VoteStatus.MajorityEmpty,
@@ -210,6 +242,7 @@ export function runConfigVote(
         };
     }
 
+    // run vote and convert to VoteResult
     if (config.type === VoteType.ThresholdMajority) {
         const result = thresholdMajority(config.numChosenOptions, mentions.includedByMentions, ballots, tieBreaker);
         if (result.status === TmStatus.Success) {
@@ -296,12 +329,25 @@ export function runConfigVote(
 }
 
 /**
- * Runs a vote with arbitrary candidate values.
+ * Runs a vote according to the configuration, with arbitrary candidate values.
  *
  * Additional notes:
  *
  * - candidate values must be `==`-comparable.
- * - for YNB votes, `candidates` must be a 2-element array containing [value of no, value of yes].
+ *
+ * Parameters:
+ *
+ * - `config`: a vote configuration. see type definition and AKSO API `Vote` schema for further details
+ * - `ballots`: all ballots in an array.
+ *   YesNo or YesNoBlank votes must have ballots with a value of YNB_NO for no and YNB_YES for yes.
+ *   any candidates in a ballot not listed in `candidates` will be ignored.
+ * - `eligibleVoters`: number of eligible voters
+ * - `candidates`: list of candidates.
+ *   for YesNo or YesNoBlank votes, this must be a 2-element array containing [ballot value of no, ballot value of yes]
+ *   (e.g. `['n', 'y']`).
+ *   any type is accepted for candidates as long as it’s `==`-comparable.
+ * - `tieBreaker`: an optional tie-breaker ballot that unambiguously orders candidates.
+ *   only applicable to ThresholdMajority, RankedPairs, SingleTransferableVote.
  */
 export function runMappedConfigVote<N>(
     config: ConfigAny,
