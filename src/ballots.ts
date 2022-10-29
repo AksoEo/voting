@@ -24,14 +24,14 @@
  * i.e. avoid storing or transmitting the resulting array.
  */
 export class BallotEncoder {
-    ballots: ArrayBuffer;
-    ballots32: Uint32Array;
-    ballots16: Uint16Array;
+    private ballots: ArrayBuffer;
+    private ballots32: Uint32Array;
+    private ballots16: Uint16Array;
 
-    ballotIndex = 1;
-    ballotCursor: number;
+    private ballotIndex = 1; // indexes ballots32. starts at 1 because the count is at position 0
+    private ballotCursor: number;
 
-    candidateMentions = new Map<number, number>();
+    private candidateMentions = new Map<number, number>();
 
     /**
      * Creates a new encoder.
@@ -47,7 +47,7 @@ export class BallotEncoder {
         this.ballots32[0] = count;
     }
 
-    #resize(size: number) {
+    private resize(size: number) {
         this.ballots = new ArrayBuffer(size);
         const ballots32 = new Uint32Array(this.ballots);
         ballots32.set(this.ballots32);
@@ -58,10 +58,10 @@ export class BallotEncoder {
     /**
      * Resizes if necessary such that the index can be written to. Uses exponential allocation.
      */
-    #resizeToWriteAt(index: number) {
+    private resizeToWriteAt(index: number) {
         if (this.ballots.byteLength <= index) {
             const nextSize = 2 ** (Math.ceil(Math.log2(this.ballots.byteLength)) + 1);
-            this.#resize(nextSize);
+            this.resize(nextSize);
         }
     }
 
@@ -82,12 +82,12 @@ export class BallotEncoder {
                 isFirstRank = false;
             } else {
                 // rank separator
-                this.#resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
+                this.resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
                 this.ballots16[cursor16++] = 0;
             }
 
             if (typeof rank === 'number') {
-                this.#resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
+                this.resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
                 this.ballots16[cursor16++] = rank;
 
                 const currentMentions = this.candidateMentions.get(rank) || 0;
@@ -95,7 +95,7 @@ export class BallotEncoder {
             } else {
                 for (const item of rank) {
                     if (!item) throw new Error('ballot item cannot be 0');
-                    this.#resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
+                    this.resizeToWriteAt(cursor16 * Uint16Array.BYTES_PER_ELEMENT);
                     this.ballots16[cursor16++] = item;
 
                     const currentMentions = this.candidateMentions.get(item) || 0;
@@ -107,14 +107,14 @@ export class BallotEncoder {
         this.ballotCursor = cursor16 * Uint16Array.BYTES_PER_ELEMENT;
     }
 
-    #writeMentions() {
+    private writeMentions() {
         this.ballots32[this.ballotIndex++] = this.ballotCursor;
         let cursor32 = Math.ceil(this.ballotCursor / Uint32Array.BYTES_PER_ELEMENT);
 
         for (const [candidate, mentions] of this.candidateMentions) {
-            this.#resizeToWriteAt(cursor32 * Uint32Array.BYTES_PER_ELEMENT);
+            this.resizeToWriteAt(cursor32 * Uint32Array.BYTES_PER_ELEMENT);
             this.ballots32[cursor32++] = candidate;
-            this.#resizeToWriteAt(cursor32 * Uint32Array.BYTES_PER_ELEMENT);
+            this.resizeToWriteAt(cursor32 * Uint32Array.BYTES_PER_ELEMENT);
             this.ballots32[cursor32++] = mentions;
         }
 
@@ -122,10 +122,10 @@ export class BallotEncoder {
     }
 
     /**
-     * Shrinks the buffer to fit and returns it.
+     * Writes candidate mentions, shrinks the buffer to fit, and returns it.
      */
     finish(): ArrayBuffer {
-        this.#writeMentions();
+        this.writeMentions();
 
         const newLen = Math.ceil(this.ballotCursor / Uint32Array.BYTES_PER_ELEMENT) * Uint32Array.BYTES_PER_ELEMENT;
         const ballots = new ArrayBuffer(newLen);

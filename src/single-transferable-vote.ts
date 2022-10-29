@@ -1,4 +1,4 @@
-export type Node = number;
+import { Node } from './config';
 
 export enum StvStatus {
     Success = 'success',
@@ -6,20 +6,20 @@ export enum StvStatus {
     IncompleteTieBreaker = 'incomplete-tie-breaker',
 }
 
-export type StvResult<T> = {
+export type StvResult<T, N> = {
     status: StvStatus.Success;
     value: T;
 } | {
     status: StvStatus.TieBreakerNeeded;
-    tiedNodes: Node[];
+    tiedNodes: N[];
 } | {
     status: StvStatus.IncompleteTieBreaker;
-    missing: Node[];
+    missing: N[];
 };
 
-export interface StvData {
-    winners: Node[];
-    events: StvEvent[];
+export interface StvData<N> {
+    winners: N[];
+    events: StvEvent<N>[];
 }
 
 export enum StvEventType {
@@ -31,19 +31,56 @@ export enum StvEventType {
     Eliminate = 'eliminate',
 }
 
-export type StvEvent = {
+export type StvEvent<N> = {
     type: StvEventType.ElectWithQuota,
-    elected: Node[],
-    values: Map<Node, number>,
+    elected: N[],
+    values: Map<N, number>,
     quota: number,
 } | {
     type: StvEventType.ElectRest,
-    elected: Node[],
+    elected: N[],
 } | {
     type: StvEventType.Eliminate,
-    candidate: Node,
-    values: Map<Node, number>,
+    candidate: N,
+    values: Map<N, number>,
 };
+
+export function remapStvEvent<N, M>(event: StvEvent<N>, remap: (node: N) => M): StvEvent<M> {
+    if (event.type === StvEventType.ElectWithQuota) {
+        return {
+            type: event.type,
+            elected: event.elected.map(remap),
+            values: new Map([...event.values.entries()].map(([k, v]) => [remap(k), v])),
+            quota: event.quota,
+        };
+    } else if (event.type === StvEventType.ElectRest) {
+        return {
+            type: event.type,
+            elected: event.elected.map(remap),
+        };
+    } else if (event.type === StvEventType.Eliminate) {
+        return {
+            type: event.type,
+            candidate: remap(event.candidate),
+            values: new Map([...event.values.entries()].map(([k, v]) => [remap(k), v])),
+        };
+    }
+}
+export function remapStvData<N, M>(data: StvData<N>, remap: (node: N) => M): StvData<M> {
+    return {
+        winners: data.winners.map(remap),
+        events: data.events.map(event => remapStvEvent(event, remap)),
+    };
+}
+export function remapStvResult<N, M>(data: StvResult<StvData<N>, N>, remap: (node: N) => M): StvResult<StvData<M>, M> {
+    if (data.status === StvStatus.Success) {
+        return { status: data.status, value: remapStvData(data.value, remap) };
+    } else if (data.status === StvStatus.TieBreakerNeeded) {
+        return { status: data.status, tiedNodes: data.tiedNodes.map(remap) };
+    } else if (data.status === StvStatus.IncompleteTieBreaker) {
+        return { status: data.status, missing: data.missing.map(remap) };
+    }
+}
 
 type Ballots16 = Uint16Array;
 
@@ -229,7 +266,7 @@ function findCandidatesWithFewestVotes(candidates: Set<Node>, voteCounts: VotesP
 }
 
 /** sorts candidates using the tie breaker ballot. highest index will be least preferred. */
-function sortByTieBreaker(candidates: Node[], tieBreaker: Node[]): StvResult<void> {
+function sortByTieBreaker(candidates: Node[], tieBreaker: Node[]): StvResult<void, Node> {
     // collect all the items we encounter that are missing from the tie breaker
     const missingTieBreakerItems = new Set<Node>();
 
@@ -265,7 +302,7 @@ function electUsingFixedQuota(
     maxWinners: number,
     tieBreaker: Node[] | null,
     electedCandidates: Set<Node>,
-): StvResult<Node[]> {
+): StvResult<Node[], Node> {
     const newlyElected = [...remainingCandidates.values()]
         .map(candidate => [candidate, voteValues.getCandidateValue(candidate)])
         .filter(([, count]) => count > fixedElectionQuota)
@@ -296,7 +333,7 @@ function electUsingFixedQuota(
 
             const sortResult = sortByTieBreaker(ambiguousCandidates, tieBreaker);
             if (sortResult.status !== StvStatus.Success) {
-                return sortResult as StvResult<Node[]>;
+                return sortResult as StvResult<any, Node>;
             }
 
             // cut newly elected to max length
@@ -331,7 +368,7 @@ function findCandidateToEliminate(
     nthPreferences: VotesPerCandidate[],
     voteValues: VoteValues,
     tieBreaker: Node[],
-): StvResult<Node> {
+): StvResult<Node, Node> {
     let candidatesWithFewestVotes = findCandidatesWithFewestVotes(remainingCandidates, voteValues.candValues);
 
     // if there’s more than one candidate with the smallest vote count,
@@ -365,7 +402,7 @@ function findCandidateToEliminate(
 
         const sortResult = sortByTieBreaker(candidatesWithFewestVotes, tieBreaker);
         if (sortResult.status !== StvStatus.Success) {
-            return sortResult as StvResult<Node>;
+            return sortResult as StvResult<any, Node>;
         }
 
         // highest index is least preferred
@@ -377,7 +414,7 @@ function findCandidateToEliminate(
     return { status: StvStatus.Success, value: candidateToEliminate };
 }
 
-export function singleTransferableVote(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): StvResult<StvData> {
+export function singleTransferableVote(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): StvResult<StvData<Node>, Node> {
     if (maxWinners >= candidates.length) {
         // there aren’t enough candidates to have an actual meaningful election here (point 7)
 
@@ -408,14 +445,14 @@ export function singleTransferableVote(maxWinners: number, candidates: Node[], b
     // use first preferences as initial vote values
     const voteValues = new VoteValues(remainingCandidates, firstPreferences, firstPreferenceAssignments);
 
-    const events: StvEvent[] = [];
+    const events: StvEvent<Node>[] = [];
 
     // Hagenbach-Bischoff quota (point 5)
     const fixedElectionQuota = ballotCount / (maxWinners + 1);
 
     // find all current first preferences who exceed the fixed quota (point 6)
     const quotaElectedResult = electUsingFixedQuota(remainingCandidates, voteValues, fixedElectionQuota, maxWinners, tieBreaker, electedCandidates);
-    if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<StvData>;
+    if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<any, Node>;
     let quotaElected = quotaElectedResult.value;
     events.push({
         type: StvEventType.ElectWithQuota,
@@ -460,7 +497,7 @@ export function singleTransferableVote(maxWinners: number, candidates: Node[], b
 
         // elect again using fixed quota (point 10)
         const quotaElectedResult = electUsingFixedQuota(remainingCandidates, voteValues, fixedElectionQuota, maxWinners, tieBreaker, electedCandidates);
-        if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<StvData>;
+        if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<any, Node>;
         quotaElected = quotaElectedResult.value;
         events.push({
             type: StvEventType.ElectWithQuota,
@@ -487,7 +524,7 @@ export function singleTransferableVote(maxWinners: number, candidates: Node[], b
                 tieBreaker,
             );
             if (eliminationResult.status !== StvStatus.Success) {
-                return eliminationResult as StvResult<StvData>;
+                return eliminationResult as StvResult<any, Node>;
             }
             const candidateToEliminate = eliminationResult.value;
 
@@ -508,7 +545,7 @@ export function singleTransferableVote(maxWinners: number, candidates: Node[], b
             events.push({ type: StvEventType.Eliminate, candidate: candidateToEliminate, values: new Map(voteValues.candValues) });
 
             const quotaElectedResult = electUsingFixedQuota(remainingCandidates, voteValues, fixedElectionQuota, maxWinners, tieBreaker, electedCandidates);
-            if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<StvData>;
+            if (quotaElectedResult.status !== StvStatus.Success) return quotaElectedResult as StvResult<any, Node>;
             quotaElected = quotaElectedResult.value;
             events.push({
                 type: StvEventType.ElectWithQuota,

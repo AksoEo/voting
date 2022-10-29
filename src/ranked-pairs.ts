@@ -1,4 +1,4 @@
-type Node = number;
+import { Node } from './config';
 type EdgeKey = string;
 
 export enum RpStatus {
@@ -8,33 +8,56 @@ export enum RpStatus {
     MajorityEmpty = 'majority-empty',
 }
 
-export type RpResult<T> = {
+export type RpResult<T, N> = {
     status: RpStatus.Success;
     value: T;
 } | {
     status: RpStatus.TieBreakerNeeded;
-    pairs: [Node, Node][];
+    pairs: [N, N][];
 } | {
     status: RpStatus.IncompleteTieBreaker;
-    missing: Node[];
+    missing: N[];
 } | {
     status: RpStatus.MajorityEmpty;
 };
 
 /** ranked pairs output */
-export interface RpData {
-    winners: Node[];
-    rounds: RpRound[];
+export interface RpData<N> {
+    winners: N[];
+    rounds: RpRound<N>[];
 }
 
 /** ranked pairs round output */
-export interface RpRound {
+export interface RpRound<N> {
     /** the node that won this round */
-    winner: Node,
+    winner: N,
     /** order of pairs this round */
-    orderedPairs: [Node, Node][];
+    orderedPairs: [N, N][];
     /** edges of the lock graph this round */
-    lockGraphEdges: [Node, Node][];
+    lockGraphEdges: [N, N][];
+}
+
+export function remapRpRound<N, M>(round: RpRound<N>, remap: (node: N) => M): RpRound<M> {
+    return {
+        winner: remap(round.winner),
+        orderedPairs: round.orderedPairs.map(([a, b]) => [remap(a), remap(b)]),
+        lockGraphEdges: round.lockGraphEdges.map(([a, b]) => [remap(a), remap(b)]),
+    };
+}
+export function remapRpData<N, M>(data: RpData<N>, remap: (node: N) => M): RpData<M> {
+    return {
+        winners: data.winners.map(remap),
+        rounds: data.rounds.map(round => remapRpRound(round, remap)),
+    };
+}
+export function remapRpResult<N, M>(data: RpResult<RpData<N>, N>, remap: (node: N) => M): RpResult<RpData<M>, M> {
+    if (data.status === RpStatus.Success) {
+        return { status: data.status, value: remapRpData(data.value, remap) };
+    } else if (data.status === RpStatus.TieBreakerNeeded) {
+        return { status: data.status, pairs: data.pairs.map(([a, b]) => [remap(a), remap(b)]) };
+    } else if (data.status === RpStatus.IncompleteTieBreaker) {
+        return { status: data.status, missing: data.missing.map(remap) };
+    }
 }
 
 enum GraphDir {
@@ -249,7 +272,7 @@ function buildGraph(candidates: Node[]): DiGraph<RpEdgeData> {
 }
 
 /** applies ballots to the graph (point 8). candidates must be sorted */
-function applyBallots(graph: DiGraph<RpEdgeData>, candidates: Node[], ballots: ArrayBuffer): RpResult<void> {
+function applyBallots(graph: DiGraph<RpEdgeData>, candidates: Node[], ballots: ArrayBuffer): RpResult<void, Node> {
     const ballots32 = new Uint32Array(ballots);
     const ballots16 = new Uint16Array(ballots);
     const ballotCount = ballots32[0];
@@ -286,7 +309,7 @@ function applyBallots(graph: DiGraph<RpEdgeData>, candidates: Node[], ballots: A
 }
 
 /** finds the winner on each RP graph edge (point 8) */
-function applyWinners(graph: DiGraph<RpEdgeData>, candidates: Node[], tieBreaker: number[] | null): RpResult<void> {
+function applyWinners(graph: DiGraph<RpEdgeData>, candidates: Node[], tieBreaker: number[] | null): RpResult<void, Node> {
     for (const cand of candidates) {
         for (const otherCand of candidates) {
             if (otherCand >= cand) break;
@@ -327,7 +350,7 @@ function applyWinners(graph: DiGraph<RpEdgeData>, candidates: Node[], tieBreaker
 }
 
 /** orders pairs for insertion into the lock graph (points 9, 10) */
-function orderPairs(pairs: [Node, Node][], graph: DiGraph<RpEdgeData>, tieBreaker: Node[]): RpResult<[Node, Node][]> {
+function orderPairs(pairs: [Node, Node][], graph: DiGraph<RpEdgeData>, tieBreaker: Node[]): RpResult<[Node, Node][], Node> {
     // convenience function for obtaining the difference value of a pair
     const pairDiff = ([a, b]) => {
         return graph.edge(a, b).diff;
@@ -445,7 +468,7 @@ function lockGraphAndFindRoundWinner(
     graph: DiGraph<RpEdgeData>,
     orderedPairs: [Node, Node][],
     tieBreaker: Node[],
-): RpResult<RpRound> {
+): RpResult<RpRound<Node>, Node> {
     // “lock in” pairs from strongest to weakest, avoiding cycles
     const lockGraph = new DiGraph<void>();
 
@@ -534,7 +557,7 @@ function lockGraphAndFindRoundWinner(
 }
 
 /** performs ranked-pairs voting */
-export function rankedPairs(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): RpResult<RpData> {
+export function rankedPairs(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): RpResult<RpData<Node>, Node> {
     const sortedCandidates = filterCandidates(candidates.sort((a, b) => a - b), ballots);
     maxWinners = Math.min(maxWinners, sortedCandidates.length);
 
@@ -543,14 +566,14 @@ export function rankedPairs(maxWinners: number, candidates: Node[], ballots: Arr
     {
         const result = applyBallots(graph, sortedCandidates, ballots);
         if (result.status !== RpStatus.Success) {
-            return result as RpResult<RpData>;
+            return result as RpResult<any, Node>;
         }
     }
 
     {
         const result = applyWinners(graph, sortedCandidates, tieBreaker);
         if (result.status !== RpStatus.Success) {
-            return result as RpResult<RpData>;
+            return result as RpResult<any, Node>;
         }
     }
 
@@ -570,18 +593,18 @@ export function rankedPairs(maxWinners: number, candidates: Node[], ballots: Arr
     }
 
     const winners: Node[] = [];
-    const rounds: RpRound[] = [];
+    const rounds: RpRound<Node>[] = [];
 
     while (true) {
         const orderPairsResult = orderPairs(pairs, graph, tieBreaker);
         if (orderPairsResult.status !== RpStatus.Success) {
-            return orderPairsResult as RpResult<RpData>;
+            return orderPairsResult as RpResult<any, Node>;
         }
         const orderedPairs = orderPairsResult.value;
 
         const roundResult = lockGraphAndFindRoundWinner(mentionedCandidates, graph, orderedPairs, tieBreaker);
         if (roundResult.status !== RpStatus.Success) {
-            return roundResult as RpResult<RpData>;
+            return roundResult as RpResult<any, Node>;
         }
         const roundWinner = roundResult.value.winner;
 

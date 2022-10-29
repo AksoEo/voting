@@ -1,4 +1,4 @@
-import { BallotEncoder, rankedPairs, singleTransferableVote } from '../dist/index.mjs';
+import { BallotEncoder, rankedPairs, singleTransferableVote, runMappedConfigVote, VoteType, VoteStatus } from '../dist/index.mjs';
 import { unordered, WHATEVER, whateverKeys, whateverRest, assertEq } from './utils.js';
 import ReferenceRankedPairs from './rp-old.js';
 import ReferenceSingleTransferableVote from './stv-old.js';
@@ -343,6 +343,36 @@ function testSingleTransferableVote() {
     });
 }
 
+function testConfigVote() {
+    const result = runMappedConfigVote(
+        {
+            type: VoteType.YesNo,
+            quorum: 0.5,
+            quorumInclusive: true,
+            majorityBallots: 0.5,
+            majorityBallotsInclusive: true,
+            majorityVoters: 0.5,
+            majorityVotersInclusive: true,
+            majorityMustReachBoth: true,
+        },
+        [['n'], ...repeat(['y'], 3)],
+        4,
+        ['n', 'y'],
+        null,
+    );
+    assertEq(result, {
+        type: VoteType.YesNo,
+        status: VoteStatus.Success,
+        ballots: { count: 4, blank: 0, voters: 4 },
+        value: {
+            tally: { yes: 3, no: 1, blank: 0 },
+            pass: { result: true, majority: true, voters: true },
+        },
+    }, 'yes/no success case failed');
+
+    // TODO maybe more tests
+}
+
 testBallotEncoder();
 
 console.log('- ranked pairs -');
@@ -350,5 +380,8 @@ testRankedPairs();
 
 console.log('\n- single transferable vote -');
 testSingleTransferableVote();
+
+console.log('\n- config vote -');
+testConfigVote();
 
 console.log('\n\x1b[32m✓ seems fine\x1b[m');
