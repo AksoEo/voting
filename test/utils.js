@@ -76,6 +76,30 @@ function deepEq(a, b, failOut) {
         }
         return true;
     }
+    if (a instanceof Map && b instanceof Map) {
+        const aKeys = new Set(a.keys());
+        const bKeys = new Set(a.keys());
+
+        if (!b.get(WHATEVER)) {
+            if (aKeys.length !== bKeys.length) {
+                failOut?.push([a, b, 'number of keys']);
+                return false;
+            }
+        }
+
+        for (const key of aKeys) {
+            if (!bKeys.has(key)) {
+                if (b.get(WHATEVER)) continue;
+                failOut?.push([a, b, `missing key ${key}`]);
+                return false;
+            }
+            if (!deepEq(a.get(key), b.get(key), failOut)) {
+                failOut?.push([a, b, `item “${key}”`]);
+                return false;
+            }
+        }
+        return true;
+    }
     if (typeof a === 'object' && typeof b === 'object') {
         if (a.prototype !== b.prototype) {
             failOut?.push([a, b, 'prototype']);

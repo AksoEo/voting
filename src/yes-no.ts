@@ -1,4 +1,4 @@
-import { ConfigYesNo, ConfigYesNoBlank, passesThreshold, countBlanks } from './config';
+import { ConfigYesNo, ConfigYesNoBlank, passesThreshold, countBlanks, candidateMentions } from './config';
 
 /** “no” value of encoded ballots */
 export const YNB_NO = 1;
@@ -27,14 +27,7 @@ export function yesNo(config: ConfigYesNo | ConfigYesNoBlank, ballots: ArrayBuff
     const ballotCount = ballots32[0];
 
     const blankCount = countBlanks(ballots);
-
-    const mentionsStart = ballots32[ballotCount + 1] / Uint32Array.BYTES_PER_ELEMENT;
-    const tally = new Map();
-    for (let i = mentionsStart; i < ballots32.length; i += 2) {
-        const value = ballots32[i];
-        const count = ballots32[i + 1];
-        tally.set(value, count);
-    }
+    const tally = candidateMentions(ballots);
 
     const noCount = tally.get(YNB_NO) || 0;
     const yesCount = tally.get(YNB_YES) || 0;

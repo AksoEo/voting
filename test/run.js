@@ -344,7 +344,8 @@ function testSingleTransferableVote() {
 }
 
 function testConfigVote() {
-    const result = runMappedConfigVote(
+    let result;
+    result = runMappedConfigVote(
         {
             type: VoteType.YesNo,
             quorum: 0.5,
@@ -369,6 +370,75 @@ function testConfigVote() {
             pass: { result: true, majority: true, voters: true },
         },
     }, 'yes/no success case failed');
+
+    result = runMappedConfigVote(
+        {
+            type: VoteType.ThresholdMajority,
+            quorum: 0.5,
+            quorumInclusive: true,
+            blankBallotsLimit: 0.5,
+            blankBallotsLimitInclusive: true,
+            numChosenOptions: 2,
+            mentionThreshold: [1, 4],
+            mentionThresholdInclusive: false,
+        },
+        [
+            [[1, 2, 3]],
+            [[2, 3, 4]],
+            [[3, 2, 5]],
+            [[3, 4, 1]],
+        ],
+        4,
+        [1, 2, 3, 4, 5],
+        null,
+    );
+    assertEq(result, {
+        type: VoteType.ThresholdMajority,
+        status: VoteStatus.Success,
+        ballots: { count: 4, blank: 0, voters: 4 },
+        mentions: {
+            mentions: new Map([[1, 2], [2, 3], [3, 4], [4, 2], [5, 1]]),
+            includedByMentions: unordered([1, 2, 3, 4]),
+            excludedByMentions: unordered([5]),
+        },
+        value: {
+            winners: unordered([2, 3]),
+            tally: new Map([[1, 2], [2, 3], [3, 4], [4, 2], [5, 1]]),
+        },
+    }, 'TM success case failed');
+
+    result = runMappedConfigVote(
+            {
+                type: VoteType.ThresholdMajority,
+                quorum: 0.5,
+                quorumInclusive: true,
+                blankBallotsLimit: 0.5,
+                blankBallotsLimitInclusive: true,
+                numChosenOptions: 2,
+                mentionThreshold: [1, 2],
+                mentionThresholdInclusive: false,
+            },
+            [
+                [[1, 2, 3]],
+                [[2, 3, 4]],
+                [[3, 2, 1]],
+                [[3, 4, 1]],
+            ],
+            4,
+            [1, 2, 3, 4, 5],
+            null,
+            );
+    assertEq(result, {
+        type: VoteType.ThresholdMajority,
+        status: VoteStatus.TieBreakerNeeded,
+        ballots: { count: 4, blank: 0, voters: 4 },
+        mentions: {
+            mentions: new Map([[1, 3], [2, 3], [3, 4], [4, 2]]),
+            includedByMentions: unordered([2, 3, 1]),
+            excludedByMentions: unordered([4, 5]),
+        },
+        tiedNodes: unordered([1, 2]),
+    }, 'TM tie breaker case failed');
 
     // TODO maybe more tests
 }

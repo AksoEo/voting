@@ -1,4 +1,4 @@
-import { Node } from './config';
+import {candidateMentions, Node} from './config';
 
 export enum TmStatus {
     Success = 'success',
@@ -46,22 +46,13 @@ export function remapTmResult<N, M>(data: TmResult<TmData<N>, N>, remap: (node: 
  * The candidates with the most votes will be chosen.
  */
 export function thresholdMajority(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): TmResult<TmData<Node>, Node> {
-    const ballots32 = new Uint32Array(ballots);
+    const tally = candidateMentions(ballots);
 
-    const tally = new Map<Node, number>();
-
-    const ballotCount = ballots32[0];
-    const mentionsStart = ballots32[1 + ballotCount] / Uint32Array.BYTES_PER_ELEMENT;
-    for (let i = mentionsStart; i < ballots32.length; i += 2) {
-        const candidate = ballots32[i];
-        const mentions = ballots32[i + 1];
-        tally.set(candidate, mentions);
-    }
-
+    // sort descending
     const sortedCandidates = candidates.slice().sort((a, b) => {
         const aMentions = tally.get(a) || 0;
         const bMentions = tally.get(b) || 0;
-        return aMentions - bMentions;
+        return bMentions - aMentions;
     });
 
     // check if there’s a tie at the boundary and ambiguity about who should be elected

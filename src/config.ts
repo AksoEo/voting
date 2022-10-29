@@ -136,7 +136,7 @@ export function passesBlankCheck(config: ConfigBlank, ballots: BallotCounts): bo
 export function candidateMentions(ballots: ArrayBuffer): Map<Node, number> {
     const ballots32 = new Uint32Array(ballots);
     const ballotCount = ballots32[0];
-    const mentionsStart = ballots32[ballotCount + 1] / Uint32Array.BYTES_PER_ELEMENT;
+    const mentionsStart = Math.ceil(ballots32[ballotCount + 1] / Uint32Array.BYTES_PER_ELEMENT);
     const tally = new Map();
     for (let i = mentionsStart; i < ballots32.length; i += 2) {
         const candidate = ballots32[i];

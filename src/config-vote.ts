@@ -58,12 +58,14 @@ type TaggedAnySuccess<N> = TaggedYnSuccess | TaggedTmSuccess<N> | TaggedRpSucces
 interface TaggedTmStvTieBreakerNeeded<N> {
     type: VoteType.ThresholdMajority | VoteType.SingleTransferableVote;
     ballots: BallotCounts;
+    mentions: BallotMentions<N>;
     status: VoteStatus.TieBreakerNeeded;
     tiedNodes: N[];
 }
 interface TaggedRpTieBreakerNeeded<N> {
     type: VoteType.RankedPairs;
     ballots: BallotCounts;
+    mentions: BallotMentions<N>;
     status: VoteStatus.TieBreakerNeeded;
     pairs: [N, N][];
 }
@@ -72,8 +74,9 @@ type TaggedTieBreakerNeeded<N> = TaggedTmStvTieBreakerNeeded<N> | TaggedRpTieBre
 // VoteStatus.IncompleteTieBreaker
 interface TaggedIncompleteTieBreaker<N> {
     type: VoteType.ThresholdMajority | VoteType.RankedPairs | VoteType.SingleTransferableVote;
-    ballots: BallotCounts;
     status: VoteStatus.IncompleteTieBreaker;
+    ballots: BallotCounts;
+    mentions: BallotMentions<N>;
     missing: N[];
 }
 
@@ -105,6 +108,14 @@ interface TaggedTooManyBlanks {
 export type VoteResult<N> = TaggedAnySuccess<N> | TaggedTieBreakerNeeded<N> | TaggedIncompleteTieBreaker<N>
     | TaggedMajorityEmpty<N> | TaggedNoQuorum | TaggedTooManyBlanks;
 
+function remapMentions<N, M>(mentions: BallotMentions<N>, remap: (node: N) => M): BallotMentions<M> {
+    return {
+        mentions: new Map([...mentions.mentions.entries()].map(([k, v]) => [remap(k), v])),
+        includedByMentions: mentions.includedByMentions.map(remap),
+        excludedByMentions: mentions.excludedByMentions.map(remap),
+    };
+}
+
 /** remaps a vote result from one candidate type to another with a remapping function. */
 function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteResult<M> {
     if (result.status === VoteStatus.Success) {
@@ -113,11 +124,7 @@ function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteRe
         } else if (result.type === VoteType.ThresholdMajority
             || result.type === VoteType.RankedPairs
             || result.type === VoteType.SingleTransferableVote) {
-            const mentions: BallotMentions<M> = {
-                mentions: new Map([...result.mentions.mentions.entries()].map(([k, v]) => [remap(k), v])),
-                includedByMentions: result.mentions.includedByMentions.map(remap),
-                excludedByMentions: result.mentions.excludedByMentions.map(remap),
-            };
+            const mentions = remapMentions(result.mentions, remap);
 
             if (result.type === VoteType.ThresholdMajority) {
                 const value = remapTmData(result.value, remap);
@@ -132,21 +139,20 @@ function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteRe
         }
     } else if (result.status === VoteStatus.TieBreakerNeeded) {
         if (result.type === VoteType.RankedPairs) {
+            const mentions = remapMentions(result.mentions, remap);
             const pairs = result.pairs.map(([a, b]) => [remap(a), remap(b)] as [M, M]);
-            return { type: result.type, ballots: result.ballots, status: result.status, pairs };
+            return { ...result, mentions, pairs };
         } else {
+            const mentions = remapMentions(result.mentions, remap);
             const tiedNodes = result.tiedNodes.map(remap);
-            return { type: result.type, ballots: result.ballots, status: result.status, tiedNodes };
+            return { ...result, mentions, tiedNodes };
         }
     } else if (result.status === VoteStatus.IncompleteTieBreaker) {
+        const mentions = remapMentions(result.mentions, remap);
         const missing = result.missing.map(remap);
-        return { type: result.type, ballots: result.ballots, status: result.status, missing };
+        return { ...result, mentions, missing };
     } else if (result.status === VoteStatus.MajorityEmpty) {
-        const mentions: BallotMentions<M> = {
-            mentions: new Map([...result.mentions.mentions.entries()].map(([k, v]) => [remap(k), v])),
-            includedByMentions: result.mentions.includedByMentions.map(remap),
-            excludedByMentions: result.mentions.excludedByMentions.map(remap),
-        };
+        const mentions = remapMentions(result.mentions, remap);
         return { ...result, mentions };
     } else {
         // other status types contains no candidates
@@ -258,6 +264,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.TieBreakerNeeded,
                 ballots: ballotCounts,
+                mentions,
                 tiedNodes: result.tiedNodes,
             };
         } else if (result.status === TmStatus.IncompleteTieBreaker) {
@@ -265,6 +272,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.IncompleteTieBreaker,
                 ballots: ballotCounts,
+                mentions,
                 missing: result.missing,
             };
         }
@@ -283,6 +291,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.TieBreakerNeeded,
                 ballots: ballotCounts,
+                mentions,
                 pairs: result.pairs,
             };
         } else if (result.status === RpStatus.IncompleteTieBreaker) {
@@ -290,6 +299,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.IncompleteTieBreaker,
                 ballots: ballotCounts,
+                mentions,
                 missing: result.missing,
             };
         } else if (result.status === RpStatus.MajorityEmpty) {
@@ -315,6 +325,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.TieBreakerNeeded,
                 ballots: ballotCounts,
+                mentions,
                 tiedNodes: result.tiedNodes,
             };
         } else if (result.status === StvStatus.IncompleteTieBreaker) {
@@ -322,6 +333,7 @@ export function runConfigVote(
                 type: config.type,
                 status: VoteStatus.IncompleteTieBreaker,
                 ballots: ballotCounts,
+                mentions,
                 missing: result.missing,
             };
         }
