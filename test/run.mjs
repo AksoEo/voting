@@ -1,7 +1,7 @@
 import { BallotEncoder, rankedPairs, singleTransferableVote, runMappedConfigVote, VoteType, VoteStatus } from '../dist/index.mjs';
-import { unordered, WHATEVER, whateverKeys, whateverRest, assertEq } from './utils.js';
-import ReferenceRankedPairs from './rp-old.js';
-import ReferenceSingleTransferableVote from './stv-old.js';
+import { unordered, WHATEVER, whateverKeys, whateverRest, assertEq } from './utils.mjs';
+import ReferenceRankedPairs from './rp-old.mjs';
+import ReferenceSingleTransferableVote from './stv-old.mjs';
 
 /** formats a ballot for printing */
 function formatBallot(ballot) {
@@ -408,26 +408,26 @@ function testConfigVote() {
     }, 'TM success case failed');
 
     result = runMappedConfigVote(
-            {
-                type: VoteType.ThresholdMajority,
-                quorum: 0.5,
-                quorumInclusive: true,
-                blankBallotsLimit: 0.5,
-                blankBallotsLimitInclusive: true,
-                numChosenOptions: 2,
-                mentionThreshold: [1, 2],
-                mentionThresholdInclusive: false,
-            },
-            [
-                [[1, 2, 3]],
-                [[2, 3, 4]],
-                [[3, 2, 1]],
-                [[3, 4, 1]],
-            ],
-            4,
-            [1, 2, 3, 4, 5],
-            null,
-            );
+        {
+            type: VoteType.ThresholdMajority,
+            quorum: 0.5,
+            quorumInclusive: true,
+            blankBallotsLimit: 0.5,
+            blankBallotsLimitInclusive: true,
+            numChosenOptions: 2,
+            mentionThreshold: [1, 2],
+            mentionThresholdInclusive: false,
+        },
+        [
+            [[1, 2, 3]],
+            [[2, 3, 4]],
+            [[3, 2, 1]],
+            [[3, 4, 1]],
+        ],
+        4,
+        [1, 2, 3, 4, 5],
+        null,
+    );
     assertEq(result, {
         type: VoteType.ThresholdMajority,
         status: VoteStatus.TieBreakerNeeded,

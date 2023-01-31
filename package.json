@@ -1,13 +1,28 @@
 {
-  "name": "akso-voting",
+  "name": "@tejo/akso-voting",
   "version": "0.1.0",
-  "main": "dist/index.mjs",
-  "type": "module",
+  "description": "Voting algorithms for AKSO",
+  "module": "dist/index.mjs",
+  "main": "dist/index.cjs",
+  "sideEffects": false,
   "scripts": {
     "build": "rollup -c",
-    "test": "node test/run.js",
+    "test": "node test/run.mjs",
     "prepare": "npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aksoeo/voting.git"
+  },
+  "author": "Tutmonda Esperantista Junulara Organizo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aksoeo/voting/issues"
+  },
+  "homepage": "https://github.com/aksoeo/voting#readme",
+  "files": [
+    "dist"
+  ],
   "devDependencies": {
     "@rollup/plugin-typescript": "^9.0.1",
     "rollup": "^2.79.1",

@@ -14,5 +14,12 @@ export default [
             format: 'esm',
         },
         ...inputOptions(),
+    },
+    {
+        output: {
+            file: 'dist/index.cjs',
+            format: 'cjs',
+        },
+        ...inputOptions(),
     }
 ];
