@@ -394,7 +394,7 @@ export function runMappedConfigVote<N>(
                 const encodedRank = [];
                 for (const item of rank) {
                     if (remappedCandidates.has(item)) {
-                        encodedRank.push(item);
+                        encodedRank.push(remappedCandidates.get(item));
                     }
                 }
                 if (encodedRank.length) encodedBallot.push(encodedRank);
