@@ -137,6 +137,7 @@ export function passesQuorumCheck(config: ConfigQuorum, ballots: BallotCounts): 
 
 /** returns true if the ballot counts pass the blank ballot limit check as specified by the configuration */
 export function passesBlankCheck(config: ConfigBlank, ballots: BallotCounts): boolean {
+    if (!ballots.count) return true;
     return withinThreshold(config.blankBallotsLimit, config.blankBallotsLimitInclusive, ballots.blank / ballots.count);
 }
 

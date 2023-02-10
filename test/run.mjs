@@ -440,6 +440,33 @@ function testConfigVote() {
         tiedNodes: unordered([1, 2]),
     }, 'TM tie breaker case failed');
 
+    result = runMappedConfigVote(
+        {
+            type: VoteType.RankedPairs,
+            quorum: 0,
+            quorumInclusive: true,
+            blankBallotsLimit: 0,
+            blankBallotsLimitInclusive: false,
+            numChosenOptions: 1,
+            mentionThreshold: 0,
+            mentionThresholdInclusive: true,
+        },
+        [],
+        4,
+        [0, 1, 2, 3],
+        null,
+    );
+    assertEq(result, {
+        type: VoteType.RankedPairs,
+        status: VoteStatus.MajorityEmpty,
+        ballots: { count: 0, blank: 0, voters: 4 },
+        mentions: {
+            mentions: new Map(),
+            includedByMentions: unordered([]),
+            excludedByMentions: unordered([0, 1, 2, 3]),
+        },
+    }, 'RP bad mentions regression case failed');
+
     // TODO maybe more tests
 }
 

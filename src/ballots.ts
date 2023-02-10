@@ -59,7 +59,9 @@ export class BallotEncoder {
      * Resizes if necessary such that the index can be written to. Uses exponential allocation.
      */
     private resizeToWriteAt(index: number) {
-        if (this.ballots.byteLength <= index) {
+        // assume we’re writing a u32 and add its size to the index
+        // (u32 is the largest data type we’re using here)
+        if (this.ballots.byteLength <= index + Uint32Array.BYTES_PER_ELEMENT) {
             const nextSize = 2 ** (Math.ceil(Math.log2(this.ballots.byteLength)) + 1);
             this.resize(nextSize);
         }
@@ -108,7 +110,10 @@ export class BallotEncoder {
     }
 
     private writeMentions() {
+        // write end_pointer
+        this.resizeToWriteAt(this.ballotIndex * Uint32Array.BYTES_PER_ELEMENT);
         this.ballots32[this.ballotIndex++] = this.ballotCursor;
+
         let cursor32 = Math.ceil(this.ballotCursor / Uint32Array.BYTES_PER_ELEMENT);
 
         for (const [candidate, mentions] of this.candidateMentions) {

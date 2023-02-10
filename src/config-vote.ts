@@ -417,5 +417,8 @@ export function runMappedConfigVote<N>(
     }
 
     const result = runConfigVote(config, encodedBallots, eligibleVoters, [...remappedCandidates.values()], encodedTieBreaker);
-    return remapResult(result, id => unmappedCandidates.get(id));
+    return remapResult(result, id => {
+        if (!unmappedCandidates.has(id)) throw new Error('candidate not found in mapping: ' + id);
+        return unmappedCandidates.get(id);
+    });
 }
