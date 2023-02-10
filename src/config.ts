@@ -114,12 +114,20 @@ function rationalToNumber(r: Rational): number {
     return r;
 }
 
-/** returns true if the value is greater than/greater-equal to threshold given by an (r, inclusive) pair. */
+/** returns true if the value is greater than/greater-equal to a threshold given by an (r, inclusive) pair. */
 export function passesThreshold(r: Rational, inclusive: boolean, value: Rational): boolean {
     if (inclusive) {
         return rationalToNumber(value) >= rationalToNumber(r);
     }
     return rationalToNumber(value) > rationalToNumber(r);
+}
+
+/** returns true if the value is less than/less-equal to a threshold given by an (r, inclusive) pair. */
+export function withinThreshold(r: Rational, inclusive: boolean, value: Rational): boolean {
+    if (inclusive) {
+        return rationalToNumber(value) <= rationalToNumber(r);
+    }
+    return rationalToNumber(value) < rationalToNumber(r);
 }
 
 /** returns true if the ballot counts pass the quorum check as specified by the configuration */
@@ -129,7 +137,7 @@ export function passesQuorumCheck(config: ConfigQuorum, ballots: BallotCounts): 
 
 /** returns true if the ballot counts pass the blank ballot limit check as specified by the configuration */
 export function passesBlankCheck(config: ConfigBlank, ballots: BallotCounts): boolean {
-    return !passesThreshold(config.blankBallotsLimit, config.blankBallotsLimitInclusive, ballots.blank / ballots.count);
+    return withinThreshold(config.blankBallotsLimit, config.blankBallotsLimitInclusive, ballots.blank / ballots.count);
 }
 
 /** extracts candidate mentions from a ballot buffer */

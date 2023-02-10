@@ -412,7 +412,7 @@ function testConfigVote() {
             type: VoteType.ThresholdMajority,
             quorum: 0.5,
             quorumInclusive: true,
-            blankBallotsLimit: 0.5,
+            blankBallotsLimit: 0,
             blankBallotsLimitInclusive: true,
             numChosenOptions: 2,
             mentionThreshold: [1, 2],
