@@ -1,6 +1,6 @@
 {
   "name": "@tejo/akso-voting",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Voting algorithms for AKSO",
   "module": "dist/index.mjs",
   "main": "dist/index.cjs",
