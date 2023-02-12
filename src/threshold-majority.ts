@@ -2,7 +2,7 @@ import {candidateMentions, Node} from './config';
 
 export enum TmStatus {
     Success = 'success',
-    TieBreakerNeeded = 'tie-breaker-needed',
+    Tie = 'tie',
     IncompleteTieBreaker = 'incomplete-tie-breaker',
 }
 
@@ -10,11 +10,9 @@ export type TmResult<T, N> = {
     status: TmStatus.Success,
     value: T,
 } | {
-    status: TmStatus.TieBreakerNeeded,
+    status: TmStatus.Tie,
     tiedNodes: N[],
-} | {
-    status: TmStatus.IncompleteTieBreaker,
-    missing: N[],
+    sortedNodes: N[],
 };
 
 /** threshold majority output */
@@ -34,10 +32,12 @@ export function remapTmData<N, M>(data: TmData<N>, remap: (node: N) => M): TmDat
 export function remapTmResult<N, M>(data: TmResult<TmData<N>, N>, remap: (node: N) => M): TmResult<TmData<M>, M> {
     if (data.status === TmStatus.Success) {
         return { status: data.status, value: remapTmData(data.value, remap) };
-    } else if (data.status === TmStatus.TieBreakerNeeded) {
-        return { status: data.status, tiedNodes: data.tiedNodes.map(remap) };
-    } else if (data.status === TmStatus.IncompleteTieBreaker) {
-        return { status: data.status, missing: data.missing.map(remap) };
+    } else if (data.status === TmStatus.Tie) {
+        return {
+            status: data.status,
+            tiedNodes: data.tiedNodes.map(remap),
+            sortedNodes: data.sortedNodes.map(remap),
+        };
     }
 }
 
@@ -45,7 +45,7 @@ export function remapTmResult<N, M>(data: TmResult<TmData<N>, N>, remap: (node: 
  * Runs a UEA threshold majority vote. Voters may elect multiple candidates, and all candidates are weighted equally.
  * The candidates with the most votes will be chosen.
  */
-export function thresholdMajority(maxWinners: number, candidates: Node[], ballots: ArrayBuffer, tieBreaker: Node[] | null): TmResult<TmData<Node>, Node> {
+export function thresholdMajority(maxWinners: number, candidates: Node[], ballots: ArrayBuffer): TmResult<TmData<Node>, Node> {
     const tally = candidateMentions(ballots);
 
     // sort descending
@@ -68,48 +68,11 @@ export function thresholdMajority(maxWinners: number, candidates: Node[], ballot
         const ambiguousCandidates = sortedCandidates
             .filter(candidate => tally.get(candidate) === stillIncludedValue);
 
-        if (!tieBreaker) {
-            return {
-                status: TmStatus.TieBreakerNeeded,
-                tiedNodes: ambiguousCandidates,
-            };
-        }
-
-        // collect all the items we encounter that are missing from the tie breaker
-        const missingTieBreakerItems = new Set<Node>();
-
-        candidates.sort((a, b) => {
-            const leftIndex = tieBreaker.indexOf(a);
-            const rightIndex = tieBreaker.indexOf(b);
-
-            if (leftIndex === -1 || rightIndex === -1) {
-                missingTieBreakerItems.add(a);
-                missingTieBreakerItems.add(b);
-                return 0;
-            }
-
-            // sort with ascending index
-            return leftIndex - rightIndex;
-        });
-
-        if (missingTieBreakerItems.size) {
-            return {
-                status: TmStatus.IncompleteTieBreaker,
-                missing: [...missingTieBreakerItems],
-            };
-        }
-
-        // cut to max length
-        sortedCandidates.splice(maxWinners);
-        // remove the ambiguous candidates
-        for (const candidate of ambiguousCandidates) {
-            const index = sortedCandidates.indexOf(candidate);
-            if (index !== -1) sortedCandidates.splice(index, 1);
-        }
-        // add them back, this time in sorted order
-        for (const candidate of ambiguousCandidates) {
-            sortedCandidates.push(candidate);
-        }
+        return {
+            status: TmStatus.Tie,
+            tiedNodes: ambiguousCandidates,
+            sortedNodes: sortedCandidates,
+        };
     }
 
     // cut off any non-elected candidates

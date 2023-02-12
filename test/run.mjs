@@ -430,7 +430,7 @@ function testConfigVote() {
     );
     assertEq(result, {
         type: VoteType.ThresholdMajority,
-        status: VoteStatus.TieBreakerNeeded,
+        status: VoteStatus.Tie,
         ballots: { count: 4, blank: 0, voters: 4 },
         mentions: {
             mentions: new Map([[1, 3], [2, 3], [3, 4], [4, 2]]),
@@ -438,7 +438,8 @@ function testConfigVote() {
             excludedByMentions: unordered([4, 5]),
         },
         tiedNodes: unordered([1, 2]),
-    }, 'TM tie breaker case failed');
+        sortedNodes: [3, 1, 2],
+    }, 'TM tie case failed');
 
     result = runMappedConfigVote(
         {

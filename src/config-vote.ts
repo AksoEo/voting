@@ -26,6 +26,8 @@ export enum VoteStatus {
     IncompleteTieBreaker = 'incomplete-tie-breaker',
     /** The majority of ballots did not contain enough candidates */
     MajorityEmpty = 'majority-empty',
+    /** The vote ended in a tie */
+    Tie = 'tie',
 
     /** Too few eligible voters submitted a ballot */
     NoQuorum = 'no-quorum',
@@ -55,8 +57,8 @@ type TaggedStvSuccess<N> = TaggedSuccess<VoteType.SingleTransferableVote, N, Stv
 type TaggedAnySuccess<N> = TaggedYnSuccess | TaggedTmSuccess<N> | TaggedRpSuccess<N> | TaggedStvSuccess<N>;
 
 // VoteStatus.TieBreakerNeeded
-interface TaggedTmStvTieBreakerNeeded<N> {
-    type: VoteType.ThresholdMajority | VoteType.SingleTransferableVote;
+interface TaggedStvTieBreakerNeeded<N> {
+    type: VoteType.SingleTransferableVote;
     ballots: BallotCounts;
     mentions: BallotMentions<N>;
     status: VoteStatus.TieBreakerNeeded;
@@ -69,15 +71,25 @@ interface TaggedRpTieBreakerNeeded<N> {
     status: VoteStatus.TieBreakerNeeded;
     pairs: [N, N][];
 }
-type TaggedTieBreakerNeeded<N> = TaggedTmStvTieBreakerNeeded<N> | TaggedRpTieBreakerNeeded<N>;
+type TaggedTieBreakerNeeded<N> = TaggedStvTieBreakerNeeded<N> | TaggedRpTieBreakerNeeded<N>;
 
 // VoteStatus.IncompleteTieBreaker
 interface TaggedIncompleteTieBreaker<N> {
-    type: VoteType.ThresholdMajority | VoteType.RankedPairs | VoteType.SingleTransferableVote;
+    type: VoteType.RankedPairs | VoteType.SingleTransferableVote;
     status: VoteStatus.IncompleteTieBreaker;
     ballots: BallotCounts;
     mentions: BallotMentions<N>;
     missing: N[];
+}
+
+// VoteStatus.Tie
+interface TaggedTie<N> {
+    type: VoteType.ThresholdMajority;
+    ballots: BallotCounts;
+    mentions: BallotMentions<N>;
+    status: VoteStatus.Tie;
+    tiedNodes: N[];
+    sortedNodes: N[];
 }
 
 // VoteStatus.MajorityEmpty
@@ -106,7 +118,7 @@ interface TaggedTooManyBlanks {
  * a vote result. union of all possible result statuses.
  */
 export type VoteResult<N> = TaggedAnySuccess<N> | TaggedTieBreakerNeeded<N> | TaggedIncompleteTieBreaker<N>
-    | TaggedMajorityEmpty<N> | TaggedNoQuorum | TaggedTooManyBlanks;
+    | TaggedTie<N> | TaggedMajorityEmpty<N> | TaggedNoQuorum | TaggedTooManyBlanks;
 
 function remapMentions<N, M>(mentions: BallotMentions<N>, remap: (node: N) => M): BallotMentions<M> {
     return {
@@ -147,6 +159,11 @@ function remapResult<N, M>(result: VoteResult<N>, remap: (node: N) => M): VoteRe
             const tiedNodes = result.tiedNodes.map(remap);
             return { ...result, mentions, tiedNodes };
         }
+    } else if (result.status === VoteStatus.Tie) {
+        const mentions = remapMentions(result.mentions, remap);
+        const tiedNodes = result.tiedNodes.map(remap);
+        const sortedNodes = result.sortedNodes.map(remap);
+        return { ...result, mentions, tiedNodes, sortedNodes };
     } else if (result.status === VoteStatus.IncompleteTieBreaker) {
         const mentions = remapMentions(result.mentions, remap);
         const missing = result.missing.map(remap);
@@ -250,7 +267,7 @@ export function runConfigVote(
 
     // run vote and convert to VoteResult
     if (config.type === VoteType.ThresholdMajority) {
-        const result = thresholdMajority(config.numChosenOptions, mentions.includedByMentions, ballots, tieBreaker);
+        const result = thresholdMajority(config.numChosenOptions, mentions.includedByMentions, ballots);
         if (result.status === TmStatus.Success) {
             return {
                 type: config.type,
@@ -259,21 +276,14 @@ export function runConfigVote(
                 mentions,
                 value: result.value,
             };
-        } else if (result.status === TmStatus.TieBreakerNeeded) {
+        } else if (result.status === TmStatus.Tie) {
             return {
                 type: config.type,
-                status: VoteStatus.TieBreakerNeeded,
+                status: VoteStatus.Tie,
                 ballots: ballotCounts,
                 mentions,
                 tiedNodes: result.tiedNodes,
-            };
-        } else if (result.status === TmStatus.IncompleteTieBreaker) {
-            return {
-                type: config.type,
-                status: VoteStatus.IncompleteTieBreaker,
-                ballots: ballotCounts,
-                mentions,
-                missing: result.missing,
+                sortedNodes: result.sortedNodes,
             };
         }
     } else if (config.type === VoteType.RankedPairs) {
