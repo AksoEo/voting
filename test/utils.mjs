@@ -38,7 +38,7 @@ function deepEq(a, b, failOut) {
                 if (item === WHATEVER_REST) continue;
                 let found = false;
                 for (const value of values) {
-                    if (deepEq(item, value)) {
+                    if (deepEq(value, item)) {
                         found = true;
                         values.delete(value);
                         break;

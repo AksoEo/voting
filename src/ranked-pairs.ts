@@ -34,7 +34,17 @@ export interface RpRound<N> {
     /** order of pairs this round */
     orderedPairs: [N, N][];
     /** edges of the lock graph this round */
-    lockGraphEdges: [N, N][];
+    lockGraphEdges: RpLockGraphEdge<N>[];
+}
+
+/** an edge in a ranked pairs lock graph */
+export interface RpLockGraphEdge<N> {
+    /** the left node of this pair */
+    from: N,
+    /** the right node of this pair */
+    to: N,
+    /** the signed difference in votes: from - to */
+    diff: number,
 }
 
 // for converting from one candidate type to another
@@ -42,7 +52,11 @@ export function remapRpRound<N, M>(round: RpRound<N>, remap: (node: N) => M): Rp
     return {
         winner: remap(round.winner),
         orderedPairs: round.orderedPairs.map(([a, b]) => [remap(a), remap(b)]),
-        lockGraphEdges: round.lockGraphEdges.map(([a, b]) => [remap(a), remap(b)]),
+        lockGraphEdges: round.lockGraphEdges.map(({ from, to, ...rest }) => ({
+            from: remap(from),
+            to: remap(to),
+            ...rest,
+        })),
     };
 }
 export function remapRpData<N, M>(data: RpData<N>, remap: (node: N) => M): RpData<M> {
@@ -547,12 +561,25 @@ function lockGraphAndFindRoundWinner(
         roundWinner = newRoundWinners[0];
     }
 
+    const lockGraphEdges: RpLockGraphEdge<Node>[] = [];
+    for (const [a, b] of lockGraph.getAllEdges()) {
+        let diff;
+        if (a >= b) {
+            const data = graph.edge(a, b);
+            diff = data.diff;
+        } else {
+            const data = graph.edge(b, a);
+            diff = -data.diff;
+        }
+        lockGraphEdges.push({ from: a, to: b, diff });
+    }
+
     return {
         status: RpStatus.Success,
         value: {
             winner: roundWinner,
             orderedPairs,
-            lockGraphEdges: lockGraph.getAllEdges(),
+            lockGraphEdges,
         },
     };
 }

@@ -139,9 +139,9 @@ function testRankedPairs() {
                 winner: 1,
                 orderedPairs: [pair(2, 3), pair(1, 3), pair(1, 2)],
                 lockGraphEdges: unordered([
-                    pair(1, 2),
-                    pair(1, 3),
-                    pair(2, 3),
+                    { from: 1, to: 2, diff: WHATEVER },
+                    { from: 1, to: 3, diff: WHATEVER },
+                    { from: 2, to: 3, diff: WHATEVER },
                 ]),
             }],
         },
@@ -157,7 +157,7 @@ function testRankedPairs() {
             rounds: [{
                 winner: 1,
                 orderedPairs: [pair(1, 2)],
-                lockGraphEdges: [pair(1, 2)],
+                lockGraphEdges: [{ from: 1, to: 2, diff: 2 }],
             }],
         },
     });
@@ -178,7 +178,7 @@ function testRankedPairs() {
             rounds: [{
                 winner: 1,
                 orderedPairs: [pair(1, 2)],
-                lockGraphEdges: [pair(1, 2)],
+                lockGraphEdges: [{ from: 1, to: 2, diff: 2 }],
             }],
         },
     });
@@ -202,7 +202,12 @@ function testRankedPairs() {
             rounds: [{
                 winner: 1,
                 orderedPairs: [pair(1, 2), pair(3, 4), ...whateverRest()],
-                lockGraphEdges: unordered([pair(1, 2), pair(3, 4), pair(1, 3), ...whateverRest()]),
+                lockGraphEdges: unordered([
+                    { from: 1, to: 2, diff: WHATEVER },
+                    { from: 3, to: 4, diff: WHATEVER },
+                    { from: 1, to: 3, diff: WHATEVER },
+                    ...whateverRest(),
+                ]),
             }],
         }
     });
